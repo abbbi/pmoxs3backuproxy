@@ -100,7 +100,7 @@ func (s *Server) listSnapshots(c minio.Client, datastore string) ([]Snapshot, er
 				if len(path) == 3 {
 					var con BackupContent
 					con.Filename = path[2]
-					con.Size += object.Size
+					con.Size = object.Size
 					existing_S.Files = append(existing_S.Files, con)
 				}
 				continue
