@@ -95,14 +95,17 @@ func (s *Server) listSnapshots(c minio.Client, datastore string) ([]Snapshot, er
 		if strings.Count(object.Key, "/") == 2 {
 			path := strings.Split(object.Key, "/")
 			fields := strings.Split(path[1], "|")
+
 			existing_S, ok := prefixMap[path[1]]
 			if ok {
-				//log.Println(path)
 				if len(path) == 3 {
-					existing_S.Files = append(existing_S.Files, path[2])
+					var con BackupContent
+					con.Filename = path[2]
+					existing_S.Files = append(existing_S.Files, con)
 				}
 				continue
 			}
+			var con BackupContent
 			backupid := fields[0]
 			backuptime := fields[1]
 			backuptype := fields[2]
@@ -111,10 +114,10 @@ func (s *Server) listSnapshots(c minio.Client, datastore string) ([]Snapshot, er
 				BackupID:   backupid,
 				BackupTime: backuptimei,
 				BackupType: backuptype,
-				Files:      make([]string, 0),
+				Files:      make([]BackupContent, 0),
 			}
 			if len(path) == 3 {
-				S.Files = append(S.Files, path[2])
+				S.Files = append(S.Files, con)
 			}
 
 			resparray = append(resparray, S)
@@ -201,23 +204,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, f := range mostRecent.Files {
-			if f == r.URL.Query().Get("archive-name") {
+			if f.Filename == r.URL.Query().Get("archive-name") {
 				obj, err := s.H2Ticket.Client.GetObject(
 					context.Background(),
 					*s.SelectedDataStore,
-					mostRecent.S3Prefix()+"/"+f,
+					mostRecent.S3Prefix()+"/"+f.Filename,
 					minio.GetObjectOptions{},
 				)
 				if err != nil {
 					w.WriteHeader(http.StatusNotFound)
-					log.Println(err.Error() + " " + mostRecent.S3Prefix() + "/" + f)
+					log.Println(err.Error() + " " + mostRecent.S3Prefix() + "/" + f.Filename)
 					io.WriteString(w, err.Error())
 					return
 				}
 				s, err := obj.Stat()
 				if err != nil {
 					w.WriteHeader(http.StatusNotFound)
-					log.Println(err.Error() + " " + mostRecent.S3Prefix() + "/" + f)
+					log.Println(err.Error() + " " + mostRecent.S3Prefix() + "/" + f.Filename)
 					io.WriteString(w, err.Error())
 					return
 				}
