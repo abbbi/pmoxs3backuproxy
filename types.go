@@ -75,6 +75,7 @@ type Snapshot struct {
 	BackupType string          `json:"backup-type"` // vm , ct, host
 	Files      []BackupContent `json:"files"`
 	Protected  bool            `json:"protected"`
+	Size       int64           `json:"size"`
 }
 
 type Response struct {

@@ -95,12 +95,12 @@ func (s *Server) listSnapshots(c minio.Client, datastore string) ([]Snapshot, er
 		if strings.Count(object.Key, "/") == 2 {
 			path := strings.Split(object.Key, "/")
 			fields := strings.Split(path[1], "|")
-
 			existing_S, ok := prefixMap[path[1]]
 			if ok {
 				if len(path) == 3 {
 					var con BackupContent
 					con.Filename = path[2]
+					con.Size += object.Size
 					existing_S.Files = append(existing_S.Files, con)
 				}
 				continue
@@ -119,6 +119,7 @@ func (s *Server) listSnapshots(c minio.Client, datastore string) ([]Snapshot, er
 			if len(path) == 3 {
 				S.Files = append(S.Files, con)
 			}
+			S.Size += object.Size
 
 			resparray = append(resparray, S)
 			prefixMap[path[1]] = &resparray[len(resparray)-1]
