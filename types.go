@@ -64,12 +64,17 @@ type FixedIndexCloseRequest struct {
 	Size       int64  `json:"size"`
 }
 
+type BackupContent struct {
+	Filename string `json:"filename"`
+	Size     int64  `json:"size"`
+}
+
 type Snapshot struct {
-	BackupID   string   `json:"backup-id"`
-	BackupTime uint64   `json:"backup-time"`
-	BackupType string   `json:"backup-type"` // vm , ct, host
-	Files      []string `jons:"files"`
-	Protected  bool     `json:"protected"`
+	BackupID   string          `json:"backup-id"`
+	BackupTime uint64          `json:"backup-time"`
+	BackupType string          `json:"backup-type"` // vm , ct, host
+	Files      []BackupContent `json:"files"`
+	Protected  bool            `json:"protected"`
 }
 
 type Response struct {

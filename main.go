@@ -95,14 +95,17 @@ func (s *Server) listSnapshots(c minio.Client, datastore string) ([]Snapshot, er
 		if strings.Count(object.Key, "/") == 2 {
 			path := strings.Split(object.Key, "/")
 			fields := strings.Split(path[1], "|")
+
 			existing_S, ok := prefixMap[path[1]]
 			if ok {
-				//log.Println(path)
 				if len(path) == 3 {
-					existing_S.Files = append(existing_S.Files, path[2])
+					var con BackupContent
+					con.Filename = path[2]
+					existing_S.Files = append(existing_S.Files, con)
 				}
 				continue
 			}
+			var con BackupContent
 			backupid := fields[0]
 			backuptime := fields[1]
 			backuptype := fields[2]
@@ -111,10 +114,10 @@ func (s *Server) listSnapshots(c minio.Client, datastore string) ([]Snapshot, er
 				BackupID:   backupid,
 				BackupTime: backuptimei,
 				BackupType: backuptype,
-				Files:      make([]string, 0),
+				Files:      make([]BackupContent, 0),
 			}
 			if len(path) == 3 {
-				S.Files = append(S.Files, path[2])
+				S.Files = append(S.Files, con)
 			}
 
 			resparray = append(resparray, S)
@@ -135,11 +138,20 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		C, auth = s.Auth[matches[1]]
 	}
 
+	debugPrint("Request:" + r.RequestURI)
 	path := strings.Split(r.RequestURI, "/")
 
-	if strings.HasPrefix(r.RequestURI, "/dynamic") && s.H2Ticket != nil && r.Method == "POST" {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("not implemented"))
+	if strings.HasPrefix(r.RequestURI, "/dynamic_index?") && s.H2Ticket != nil && r.Method == "POST" {
+		fidxname := r.URL.Query().Get("archive-name")
+		infoPrint("Archive name: %s", fidxname)
+		wid := atomic.AddInt32(&s.CurWriter, 1)
+		resp, _ := json.Marshal(Response{
+			Data: wid,
+		})
+
+		s.Writers[wid] = &Writer{Assignments: make(map[int64][]byte), FidxName: fidxname}
+		w.Header().Add("Content-Type", "application/json")
+		w.Write(resp)
 		return
 	}
 
@@ -159,7 +171,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Write(resp)
 		}
 
-		if action == "snapshots" {
+		if strings.HasPrefix(action, "snapshots") {
 			resparray, err := s.listSnapshots(*C.Client, ds)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -168,6 +180,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			resp, _ := json.Marshal(Response{
 				Data: resparray,
 			})
+			debugPrint("%s", resp)
 			w.Header().Add("Content-Type", "application/json")
 			w.Write(resp)
 		}
@@ -201,23 +214,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, f := range mostRecent.Files {
-			if f == r.URL.Query().Get("archive-name") {
+			if f.Filename == r.URL.Query().Get("archive-name") {
 				obj, err := s.H2Ticket.Client.GetObject(
 					context.Background(),
 					*s.SelectedDataStore,
-					mostRecent.S3Prefix()+"/"+f,
+					mostRecent.S3Prefix()+"/"+f.Filename,
 					minio.GetObjectOptions{},
 				)
 				if err != nil {
 					w.WriteHeader(http.StatusNotFound)
-					log.Println(err.Error() + " " + mostRecent.S3Prefix() + "/" + f)
+					log.Println(err.Error() + " " + mostRecent.S3Prefix() + "/" + f.Filename)
 					io.WriteString(w, err.Error())
 					return
 				}
 				s, err := obj.Stat()
 				if err != nil {
 					w.WriteHeader(http.StatusNotFound)
-					log.Println(err.Error() + " " + mostRecent.S3Prefix() + "/" + f)
+					log.Println(err.Error() + " " + mostRecent.S3Prefix() + "/" + f.Filename)
 					io.WriteString(w, err.Error())
 					return
 				}
@@ -250,7 +263,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Write(resp)
 	}
 
-	if strings.HasPrefix(r.RequestURI, "/fixed_close?") && s.H2Ticket != nil && r.Method == "POST" {
+	if strings.HasPrefix(r.RequestURI, "/fixed_close?") || strings.HasPrefix(r.RequestURI, "/dynamic_close?") && s.H2Ticket != nil && r.Method == "POST" {
 		wid, _ := strconv.ParseInt(r.URL.Query().Get("wid"), 10, 32)
 		csumindex, _ := hex.DecodeString(r.URL.Query().Get("csum"))
 		outFile := make([]byte, 0)
@@ -389,7 +402,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if strings.HasPrefix(r.RequestURI, "/fixed_chunk?") {
+	if strings.HasPrefix(r.RequestURI, "/fixed_chunk?") || strings.HasPrefix(r.RequestURI, "/dynamic_chunk?") {
 		esize, _ := strconv.Atoi(r.URL.Query().Get("encoded-size"))
 		size, _ := strconv.Atoi(r.URL.Query().Get("size"))
 		digest := r.URL.Query().Get("digest")
