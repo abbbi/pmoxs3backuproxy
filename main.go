@@ -185,6 +185,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	/*Backup HTTP2 Api*/
 	if strings.HasPrefix(r.RequestURI, "/finish") && s.H2Ticket != nil && r.Method == "POST" {
 		s.H2Ticket = nil
+		delete(s.Auth, matches[1])
 		s.Finished = true
 	}
 	if strings.HasPrefix(r.RequestURI, "/previous?") && s.H2Ticket != nil && r.Method == "GET" {
