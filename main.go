@@ -26,8 +26,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"regexp"
@@ -81,14 +83,19 @@ func main() {
 	srv.SetKeepAlivesEnabled(true)
 	go S.ticketGC()
 	infoPrint("Starting PBS api server on [%s], upstream: [%s] ssl: [%t]", *bindAddress, *endpointFlag, *insecureFlag)
-	
+
+	go func() {
+		infoPrint("Start pprof on port 6060")
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	err := srv.ListenAndServeTLS(*certFlag, *keyFlag)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func (s *Server)ticketGC() {
+func (s *Server) ticketGC() {
 	for {
 		expireKeys := make([]string, 0)
 		now := uint64(time.Now().Unix())
@@ -98,11 +105,11 @@ func (s *Server)ticketGC() {
 			}
 		}
 		debugPrint("Expire %d tickets", len(expireKeys))
-		for _ , k := range expireKeys {
+		for _, k := range expireKeys {
 			delete(s.Auth, k)
 			debugPrint("Expired ticket %s", k)
 		}
-		time.Sleep(30*time.Second)
+		time.Sleep(30 * time.Second)
 	}
 }
 
@@ -622,7 +629,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			AccessKeyID:     strings.Split(req.Username, "@")[0],
 			SecretAccessKey: req.Password,
 			Endpoint:        s.S3Endpoint,
-			Expire: uint64(time.Now().Unix())+s.TicketExpire,
+			Expire:          uint64(time.Now().Unix()) + s.TicketExpire,
 		}
 		minioClient, err := minio.New(te.Endpoint, &minio.Options{
 			Creds:  credentials.NewStaticV4(te.AccessKeyID, te.SecretAccessKey, ""),
