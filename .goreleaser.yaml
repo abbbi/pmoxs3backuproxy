@@ -1,6 +1,6 @@
 builds:
   -
-    main: .
+    main: tizbac/pmoxs3backuproxy/cmd/pmoxs3backuproxy
     binary: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
     env:
       - CGO_ENABLED=0
