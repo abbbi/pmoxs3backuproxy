@@ -226,6 +226,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if r.Method == "GET" {
 				resparray, err := s3pmoxcommon.ListSnapshots(*C.Client, ds, false)
 				if err != nil {
+					s3backuplog.InfoPrint("Listing snapshots failed:", err.Error())
 					w.WriteHeader(http.StatusInternalServerError)
 					io.WriteString(w, err.Error())
 				}
@@ -417,6 +418,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.RequestURI, "/fixed_index") && s.H2Ticket != nil && r.Method == "PUT" {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
+			s3backuplog.ErrorPrint("Unable to read request body:", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(err.Error()))
 			return
@@ -424,6 +426,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req := AssignmentRequest{}
 		err = json.Unmarshal(body, &req)
 		if err != nil {
+			s3backuplog.ErrorPrint("Unable to unmarshal json:", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(err.Error()))
 			return
@@ -446,6 +449,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for i := 0; i < len(req.DigestList); i++ {
 			b, err := hex.DecodeString(req.DigestList[i])
 			if err != nil {
+				s3backuplog.ErrorPrint("Unable decode digest:", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				io.WriteString(w, err.Error())
 			}
