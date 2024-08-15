@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -135,17 +136,53 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(action, "notes") && r.Method == "GET" {
 			var ss s3pmoxcommon.Snapshot
 			ss.InitWithQuery(r.URL.Query())
+
+			existingTags, err := C.Client.GetObjectTagging(
+				context.Background(),
+				ds,
+				ss.S3Prefix()+"/index.json.blob",
+				minio.GetObjectTaggingOptions{},
+			)
+			if err != nil {
+				s3backuplog.ErrorPrint("Unable to get tags: %s", err.Error())
+			}
+			var note []byte
+			tagmap := existingTags.ToMap()
+			tagvalue, ok := tagmap["note"]
+			if ok {
+				note, _ = base64.RawStdEncoding.DecodeString(tagvalue)
+			}
+
 			w.Header().Add("Content-Type", "application/json")
 			resp, _ := json.Marshal(Response{
-				Data: "Hello",
+				Data: string(note),
 			})
 			w.Write(resp)
 			return
 		}
 		if strings.HasPrefix(action, "notes") && r.Method == "PUT" {
-			// TODO: create common function for adding tags.
-			// Add the notes with a s3 tag just as we do with
-			// the protected flag
+			var ss s3pmoxcommon.Snapshot
+			ss.InitWithQuery(r.URL.Query())
+			note := r.FormValue("notes")
+			note = base64.RawStdEncoding.EncodeToString([]byte(note))
+			var tag *tags.Tags
+			tag, _ = tags.NewTags(map[string]string{
+				"note": note,
+			}, false)
+			err := C.Client.PutObjectTagging(
+				context.Background(),
+				ds,
+				ss.S3Prefix()+"/index.json.blob",
+				tag,
+				minio.PutObjectTaggingOptions{},
+			)
+			if err != nil {
+				s3backuplog.ErrorPrint("Unable to set note tag for object: %s: %s", ss.S3Prefix(), err.Error())
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
 		}
 		if strings.HasPrefix(action, "files") && r.Method == "GET" {
 			/** TODO: return a list of files, for now this just
