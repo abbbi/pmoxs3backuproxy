@@ -132,6 +132,40 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(path) >= 7 && strings.HasPrefix(r.RequestURI, "/api2/json/admin/datastore/") && auth {
 		ds := path[5]
 		action := path[6]
+		if strings.HasPrefix(action, "notes") && r.Method == "GET" {
+			var ss s3pmoxcommon.Snapshot
+			ss.InitWithQuery(r.URL.Query())
+			w.Header().Add("Content-Type", "application/json")
+			resp, _ := json.Marshal(Response{
+				Data: "Hello",
+			})
+			w.Write(resp)
+			return
+		}
+		if strings.HasPrefix(action, "notes") && r.Method == "PUT" {
+			// TODO: create common function for adding tags.
+			// Add the notes with a s3 tag just as we do with
+			// the protected flag
+		}
+		if strings.HasPrefix(action, "files") && r.Method == "GET" {
+			/** TODO: return a list of files, for now this just
+			fakes an reply so the "Edit notes" window appears
+			**/
+			var ss s3pmoxcommon.Snapshot
+			var file s3pmoxcommon.SnapshotFile
+			file.Filename = "foo"
+			file.Size = 200
+			ss.Files = append(ss.Files, file)
+			ss.InitWithQuery(r.URL.Query())
+			w.Header().Add("Content-Type", "application/json")
+			resp, _ := json.Marshal(Response{
+				Data: ss.Files,
+			})
+			s3backuplog.ErrorPrint("%s", resp)
+			w.Write(resp)
+			return
+		}
+
 		if strings.HasPrefix(action, "protected") && r.Method == "GET" {
 			var ss s3pmoxcommon.Snapshot
 			ss.InitWithQuery(r.URL.Query())
