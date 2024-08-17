@@ -136,12 +136,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s3backuplog.DebugPrint("Request:" + r.RequestURI + " Method: " + r.Method)
 	path := strings.Split(r.RequestURI, "/")
 
-	if strings.HasPrefix(r.RequestURI, "/dynamic") && s.H2Ticket != nil && r.Method == "POST" {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("not implemented"))
-		return
-	}
-
 	if len(path) >= 7 && strings.HasPrefix(r.RequestURI, "/api2/json/admin/datastore/") && auth {
 		ds := path[5]
 		action := path[6]
@@ -538,7 +532,36 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if strings.HasPrefix(r.RequestURI, "/fixed_index") || strings.HasPrefix(r.RequestURI, "/dynamic_index") && s.H2Ticket != nil && r.Method == "PUT" {
+	if strings.HasPrefix(r.RequestURI, "/dynamic_index") && s.H2Ticket != nil && r.Method == "PUT" {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			s3backuplog.ErrorPrint("Unable to read body: %s", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		req := AssignmentRequest{}
+		err = json.Unmarshal(body, &req)
+		if err != nil {
+			s3backuplog.ErrorPrint("Unable to unmarshal json: %s", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		s3backuplog.ErrorPrint("%s", req)
+		for i := 0; i < len(req.DigestList); i++ {
+			b, err := hex.DecodeString(req.DigestList[i])
+			if err != nil {
+				s3backuplog.ErrorPrint("Unable to decode digest: %s", err.Error())
+				w.WriteHeader(http.StatusBadRequest)
+				io.WriteString(w, err.Error())
+			}
+			s.Writers[req.Wid].Assignments[int64(req.OffsetList[i])] = b
+		}
+
+	}
+
+	if strings.HasPrefix(r.RequestURI, "/fixed_index") && s.H2Ticket != nil && r.Method == "PUT" {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			s3backuplog.ErrorPrint("Unable to read body: %s", err.Error())
