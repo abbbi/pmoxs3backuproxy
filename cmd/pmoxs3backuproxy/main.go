@@ -49,6 +49,7 @@ var connectionList = make(map[string]*minio.Client)
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func writeBinary(buf *bytes.Buffer, data interface{}) {
+	s3backuplog.InfoPrint("%s", data)
 	err := binary.Write(buf, binary.LittleEndian, data)
 	if err != nil {
 		fmt.Println("Error writing binary data:", err)
@@ -466,54 +467,41 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeBinary(buf, magic)
 
 		// 2. Write UUID
-		uuid := [16]byte{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}
-		writeBinary(buf, uuid)
+		u := uuid.New() //Generate a new uuid too
+		b, _ := u.MarshalBinary()
+		writeBinary(buf, b)
 
 		// 3. Write ctime (current time as i64)
-		ctime := time.Now().Unix()
+		ctime := uint64(time.Now().Unix())
 		writeBinary(buf, ctime)
 
-		// 4. Placeholder for index_csum (32 bytes, will calculate later)
-		indexCsumPos := buf.Len() // Store the position of index_csum
+		// checksum
 		writeBinary(buf, [32]byte{})
 
 		// 5. Write reserved (4032 bytes)
 		reserved := [4032]byte{}
 		writeBinary(buf, reserved)
+		s3backuplog.InfoPrint("Header size %v", buf.Len())
 		// 7. Write chunks with offsets and digests
-		var chunkOffset uint64 = uint64(buf.Len()) // Start after header
-		var offsets []uint64
-		var digests [][32]byte
-		for i := 0; i <= chunk_count; i++ {
+		//var offsets []uint64
+		//var digests [][32]byte
+		s3backuplog.InfoPrint("%v assigments", len(s.Writers[int32(wid)].Assignments))
+		for i := 0; i < chunk_count; i++ {
 			// Write chunk to buffer
 			chunk := s.Writers[int32(wid)].Assignments[int64(i)]
+			s3backuplog.InfoPrint("Write chunk with size %v for file %v", len(chunk), s.Writers[int32(wid)].FidxName)
 			writeBinary(buf, chunk)
-
-			// Calculate offset for the next chunk
-			chunkOffset += uint64(len(chunk))
-
-			// Calculate and store digest
 			digest := sha256Hash(chunk)
-			digests = append(digests, digest)
+			s3backuplog.InfoPrint("Write digest %v", digest)
+			writeBinary(buf, digest)
+		}
+		s3backuplog.InfoPrint("Buffer length after chunks %v", buf.Len())
 
-			// Store offset for later use
-			offsets = append(offsets, chunkOffset)
-		}
-		// Write offsets and digests after chunks
-		for i, offset := range offsets {
-			writeBinary(buf, offset)
-			writeBinary(buf, digests[i])
-		}
-		indexData := make([]byte, 0)
-		for i := range offsets {
-			offsetBytes := make([]byte, 8)
-			binary.LittleEndian.PutUint64(offsetBytes, offsets[i])
-			indexData = append(indexData, offsetBytes...)
-			indexData = append(indexData, digests[i][:]...)
-		}
+		//indexCsum := sha256Hash(buf.Bytes())
+		//copy(buf.Bytes()[indexCsumPos:], indexCsum[:])
+		//writeBinary(buf, indexCsum)
 
-		indexCsum := sha256Hash(indexData)
-		copy(buf.Bytes()[indexCsumPos:], indexCsum[:])
+		s3backuplog.InfoPrint("Buffer length after csum %v", buf.Len())
 		finalData := buf.Bytes()
 
 		s3backuplog.InfoPrint("Dynamic size %v:", int64(len(finalData)))
@@ -523,7 +511,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			*s.SelectedDataStore,
 			s.Snapshot.S3Prefix()+"/"+s.Writers[int32(wid)].FidxName,
 			R,
-			int64(len(finalData)),
+			int64(R.Len()),
 			minio.PutObjectOptions{},
 		)
 		if err != nil {
