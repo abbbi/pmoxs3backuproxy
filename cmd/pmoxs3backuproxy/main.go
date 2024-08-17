@@ -349,7 +349,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		resp, _ := json.Marshal(Response{
 			Data: wid,
 		})
-
 		s.Writers[wid] = &Writer{Assignments: make(map[int64][]byte), FidxName: fidxname}
 		w.Header().Add("Content-Type", "application/json")
 		w.Write(resp)
@@ -445,8 +444,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			minio.CopyDestOptions{Bucket: *s.SelectedDataStore, Object: "indexed/" + r.URL.Query().Get("csum") + ".fidx"},
 			minio.CopySrcOptions{Bucket: *s.SelectedDataStore, Object: s.Snapshot.S3Prefix() + "/" + s.Writers[int32(wid)].FidxName},
 		)
-		/*_, err = s.H2Ticket.Client.PutObject(context.Background(), *s.SelectedDataStore, "indexed/"+r.URL.Query().Get("csum"), R, int64(len(outFile)), minio.PutObjectOptions{UserMetadata: map[string]string{"csum": r.URL.Query().Get("csum")}})
-		 */
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
@@ -458,53 +455,37 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.RequestURI, "/dynamic_close?") && s.H2Ticket != nil && r.Method == "POST" {
 		wid, _ := strconv.ParseInt(r.URL.Query().Get("wid"), 10, 32)
 		chunk_count, _ := strconv.Atoi((r.URL.Query().Get("chunk-count")))
+		chunk_size, _ := strconv.Atoi((r.URL.Query().Get("size")))
 		s3backuplog.InfoPrint("Got %v chunks", chunk_count)
+		s3backuplog.InfoPrint("Got %v size", chunk_size)
 		// Create a buffer to hold the binary data
 		buf := new(bytes.Buffer)
-
-		// 1. Write MAGIC
 		magic := [8]byte{28, 145, 78, 165, 25, 186, 179, 205}
 		writeBinary(buf, magic)
-
-		// 2. Write UUID
-		u := uuid.New() //Generate a new uuid too
+		u := uuid.New()
 		b, _ := u.MarshalBinary()
 		writeBinary(buf, b)
-
-		// 3. Write ctime (current time as i64)
 		ctime := uint64(time.Now().Unix())
 		writeBinary(buf, ctime)
+		writeBinary(buf, [32]byte{0})
 
-		// checksum
-		writeBinary(buf, [32]byte{})
-
-		// 5. Write reserved (4032 bytes)
 		reserved := [4032]byte{}
 		writeBinary(buf, reserved)
 		s3backuplog.InfoPrint("Header size %v", buf.Len())
-		// 7. Write chunks with offsets and digests
-		//var offsets []uint64
-		//var digests [][32]byte
-		s3backuplog.InfoPrint("%v assigments", len(s.Writers[int32(wid)].Assignments))
 		for i := 0; i < chunk_count; i++ {
-			// Write chunk to buffer
-			chunk := s.Writers[int32(wid)].Assignments[int64(i)]
-			s3backuplog.InfoPrint("Write chunk with size %v for file %v", len(chunk), s.Writers[int32(wid)].FidxName)
-			writeBinary(buf, chunk)
-			digest := sha256Hash(chunk)
-			s3backuplog.InfoPrint("Write digest %v", digest)
+			digest := s.Writers[int32(wid)].Assignments[int64(i)]
+			writeBinary(buf, int64(chunk_size))
 			writeBinary(buf, digest)
-		}
-		s3backuplog.InfoPrint("Buffer length after chunks %v", buf.Len())
 
+		}
+
+		// TOOD: add sha256 sum?
 		//indexCsum := sha256Hash(buf.Bytes())
 		//copy(buf.Bytes()[indexCsumPos:], indexCsum[:])
 		//writeBinary(buf, indexCsum)
 
-		s3backuplog.InfoPrint("Buffer length after csum %v", buf.Len())
 		finalData := buf.Bytes()
 
-		s3backuplog.InfoPrint("Dynamic size %v:", int64(len(finalData)))
 		R := bytes.NewReader(finalData)
 		_, err := s.H2Ticket.Client.PutObject(
 			context.Background(),
@@ -538,7 +519,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(err.Error()))
 			return
 		}
-		s3backuplog.ErrorPrint("%s", req)
+		s3backuplog.ErrorPrint("%s", body)
 		for i := 0; i < len(req.DigestList); i++ {
 			b, err := hex.DecodeString(req.DigestList[i])
 			if err != nil {
