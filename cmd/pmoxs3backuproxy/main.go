@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -349,7 +350,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(r.RequestURI, "/dynamic_index?") && s.H2Ticket != nil && r.Method == "POST" {
 		fidxname := r.URL.Query().Get("archive-name")
-		s3backuplog.InfoPrint("Archive name : %s, size: %s\n", fidxname, size)
 		wid := atomic.AddInt32(&s.CurWriter, 1)
 		resp, _ := json.Marshal(Response{
 			Data: wid,
@@ -461,6 +461,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.HasPrefix(r.RequestURI, "/dynamic_close?") && s.H2Ticket != nil && r.Method == "POST" {
+		wid, _ := strconv.ParseInt(r.URL.Query().Get("wid"), 10, 32)
 		// Create a buffer to hold the binary data
 		buf := new(bytes.Buffer)
 
@@ -487,7 +488,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var chunkOffset uint64 = uint64(buf.Len()) // Start after header
 		var offsets []uint64
 		var digests [][32]byte
-		for chunk := range s.Writers[int32(wid)].Assignments {
+		for _, chunk := range s.Writers[int32(wid)].Assignments {
 			// Write chunk to buffer
 			writeBinary(buf, chunk)
 
@@ -518,12 +519,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		copy(buf.Bytes()[indexCsumPos:], indexCsum[:])
 		finalData := buf.Bytes()
 
-		R := bytes.NewReader(outFile)
+		R := bytes.NewReader(finalData)
 		_, err := s.H2Ticket.Client.PutObject(
 			context.Background(),
 			*s.SelectedDataStore,
 			s.Snapshot.S3Prefix()+"/"+s.Writers[int32(wid)].FidxName,
-			finalData,
+			R,
 			int64(len(finalData)),
 			minio.PutObjectOptions{
 				UserMetadata: map[string]string{"csum": r.URL.Query().Get("csum")},
