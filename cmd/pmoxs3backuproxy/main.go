@@ -456,6 +456,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(r.RequestURI, "/dynamic_close?") && s.H2Ticket != nil && r.Method == "POST" {
 		wid, _ := strconv.ParseInt(r.URL.Query().Get("wid"), 10, 32)
+		chunk_count, _ := strconv.Atoi((r.URL.Query().Get("chunk-count")))
+		s3backuplog.InfoPrint("Got %v chunks", chunk_count)
 		// Create a buffer to hold the binary data
 		buf := new(bytes.Buffer)
 
@@ -482,8 +484,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var chunkOffset uint64 = uint64(buf.Len()) // Start after header
 		var offsets []uint64
 		var digests [][32]byte
-		for _, chunk := range s.Writers[int32(wid)].Assignments {
+		for i := 0; i <= chunk_count; i++ {
 			// Write chunk to buffer
+			chunk := s.Writers[int32(wid)].Assignments[int64(i)]
 			writeBinary(buf, chunk)
 
 			// Calculate offset for the next chunk
@@ -513,6 +516,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		copy(buf.Bytes()[indexCsumPos:], indexCsum[:])
 		finalData := buf.Bytes()
 
+		s3backuplog.InfoPrint("Dynamic size %v:", int64(len(finalData)))
 		R := bytes.NewReader(finalData)
 		_, err := s.H2Ticket.Client.PutObject(
 			context.Background(),
@@ -520,9 +524,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.Snapshot.S3Prefix()+"/"+s.Writers[int32(wid)].FidxName,
 			R,
 			int64(len(finalData)),
-			minio.PutObjectOptions{
-				UserMetadata: map[string]string{"csum": r.URL.Query().Get("csum")},
-			},
+			minio.PutObjectOptions{},
 		)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
