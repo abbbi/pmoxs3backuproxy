@@ -47,6 +47,18 @@ var connectionList = make(map[string]*minio.Client)
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+func writeBinary(buf *bytes.Buffer, data interface{}) {
+	err := binary.Write(buf, binary.LittleEndian, data)
+	if err != nil {
+		fmt.Println("Error writing binary data:", err)
+	}
+}
+
+// Helper function to calculate SHA-256 hash
+func sha256Hash(data []byte) [32]byte {
+	return sha256.Sum256(data)
+}
+
 func RandStringBytes(n int) string {
 	b := make([]byte, n)
 	for i := range b {
@@ -335,6 +347,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Write(resp)
 	}
 
+	if strings.HasPrefix(r.RequestURI, "/dynamic_index?") && s.H2Ticket != nil && r.Method == "POST" {
+		fidxname := r.URL.Query().Get("archive-name")
+		s3backuplog.InfoPrint("Archive name : %s, size: %s\n", fidxname, size)
+		wid := atomic.AddInt32(&s.CurWriter, 1)
+		resp, _ := json.Marshal(Response{
+			Data: wid,
+		})
+
+		s.Writers[wid] = &Writer{Assignments: make(map[int64][]byte), FidxName: fidxname}
+		w.Header().Add("Content-Type", "application/json")
+		w.Write(resp)
+	}
+
 	if strings.HasPrefix(r.RequestURI, "/fixed_close?") && s.H2Ticket != nil && r.Method == "POST" {
 		wid, _ := strconv.ParseInt(r.URL.Query().Get("wid"), 10, 32)
 		csumindex, _ := hex.DecodeString(r.URL.Query().Get("csum"))
@@ -435,7 +460,84 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if strings.HasPrefix(r.RequestURI, "/fixed_index") && s.H2Ticket != nil && r.Method == "PUT" {
+	if strings.HasPrefix(r.RequestURI, "/dynamic_close?") && s.H2Ticket != nil && r.Method == "POST" {
+		// Create a buffer to hold the binary data
+		buf := new(bytes.Buffer)
+
+		// 1. Write MAGIC
+		magic := [8]byte{28, 145, 78, 165, 25, 186, 179, 205}
+		writeBinary(buf, magic)
+
+		// 2. Write UUID
+		uuid := [16]byte{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}
+		writeBinary(buf, uuid)
+
+		// 3. Write ctime (current time as i64)
+		ctime := time.Now().Unix()
+		writeBinary(buf, ctime)
+
+		// 4. Placeholder for index_csum (32 bytes, will calculate later)
+		indexCsumPos := buf.Len() // Store the position of index_csum
+		writeBinary(buf, [32]byte{})
+
+		// 5. Write reserved (4032 bytes)
+		reserved := [4032]byte{}
+		writeBinary(buf, reserved)
+		// 7. Write chunks with offsets and digests
+		var chunkOffset uint64 = uint64(buf.Len()) // Start after header
+		var offsets []uint64
+		var digests [][32]byte
+		for chunk := range s.Writers[int32(wid)].Assignments {
+			// Write chunk to buffer
+			writeBinary(buf, chunk)
+
+			// Calculate offset for the next chunk
+			chunkOffset += uint64(len(chunk))
+
+			// Calculate and store digest
+			digest := sha256Hash(chunk)
+			digests = append(digests, digest)
+
+			// Store offset for later use
+			offsets = append(offsets, chunkOffset)
+		}
+		// Write offsets and digests after chunks
+		for i, offset := range offsets {
+			writeBinary(buf, offset)
+			writeBinary(buf, digests[i])
+		}
+		indexData := make([]byte, 0)
+		for i := range offsets {
+			offsetBytes := make([]byte, 8)
+			binary.LittleEndian.PutUint64(offsetBytes, offsets[i])
+			indexData = append(indexData, offsetBytes...)
+			indexData = append(indexData, digests[i][:]...)
+		}
+
+		indexCsum := sha256Hash(indexData)
+		copy(buf.Bytes()[indexCsumPos:], indexCsum[:])
+		finalData := buf.Bytes()
+
+		R := bytes.NewReader(outFile)
+		_, err := s.H2Ticket.Client.PutObject(
+			context.Background(),
+			*s.SelectedDataStore,
+			s.Snapshot.S3Prefix()+"/"+s.Writers[int32(wid)].FidxName,
+			finalData,
+			int64(len(finalData)),
+			minio.PutObjectOptions{
+				UserMetadata: map[string]string{"csum": r.URL.Query().Get("csum")},
+			},
+		)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			s3backuplog.ErrorPrint("%s failed to upload to S3 bucket: %s", s.Writers[int32(wid)].FidxName, err.Error())
+			return
+		}
+	}
+
+	if strings.HasPrefix(r.RequestURI, "/fixed_index") || strings.HasPrefix(r.RequestURI, "/dynamic_index") && s.H2Ticket != nil && r.Method == "PUT" {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			s3backuplog.ErrorPrint("Unable to read body: %s", err.Error())
@@ -477,7 +579,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if strings.HasPrefix(r.RequestURI, "/fixed_chunk?") {
+	if strings.HasPrefix(r.RequestURI, "/fixed_chunk?") || strings.HasPrefix(r.RequestURI, "/dynamic_chunk?") {
 		esize, _ := strconv.Atoi(r.URL.Query().Get("encoded-size"))
 		size, _ := strconv.Atoi(r.URL.Query().Get("size"))
 		digest := r.URL.Query().Get("digest")
