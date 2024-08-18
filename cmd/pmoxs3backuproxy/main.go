@@ -30,12 +30,15 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 	"tizbac/pmoxs3backuproxy/internal/s3backuplog"
 	"tizbac/pmoxs3backuproxy/internal/s3pmoxcommon"
+
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
@@ -342,7 +345,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		resp, _ := json.Marshal(Response{
 			Data: wid,
 		})
-		s.Writers[wid] = &Writer{Assignments: make(map[int64][]byte), FidxName: fidxname}
+		s.Writers[wid] = &Writer{Assignments: make(map[int64][]byte), DynamicChunkSizes: make(map[string]uint64), FidxName: fidxname}
 		w.Header().Add("Content-Type", "application/json")
 		w.Write(resp)
 	}
@@ -447,7 +450,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(r.RequestURI, "/dynamic_close?") && s.H2Ticket != nil && r.Method == "POST" {
 		wid, _ := strconv.ParseInt(r.URL.Query().Get("wid"), 10, 32)
-		//chunk_size, _ := strconv.Atoi((r.URL.Query().Get("size")))
 		csumindex, _ := hex.DecodeString(r.URL.Query().Get("csum"))
 
 		header := new(bytes.Buffer)
@@ -463,11 +465,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reserved := [4032]byte{}
 		writeBinary(header, reserved)
 
-		// TOOD: Error: wrong checksum for file 'root.pxar.didx'
-		for v, k := range s.Writers[int32(wid)].Assignments {
-			writeBinary(header, v)
-			writeBinary(header, k)
+		spew.Dump(s.Writers[int32(wid)].Assignments)
+
+		var keys []int64
+		for k := range s.Writers[int32(wid)].Assignments {
+			keys = append(keys, k)
 		}
+		sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+		var offset uint64 = 0
+		for _, k := range keys {
+			digest := hex.EncodeToString(s.Writers[int32(wid)].Assignments[k])
+
+			foo, ok := s.Writers[int32(wid)].DynamicChunkSizes[digest]
+			if ok {
+				s3backuplog.DebugPrint("Found original size for digest %s, size: %d", digest, foo)
+			} else {
+				panic("foo")
+			}
+
+			spew.Dump(k)
+			offset = uint64(k) + foo
+			s3backuplog.ErrorPrint("OFFSET IS: %d", offset)
+			spew.Dump(offset)
+			writeBinary(header, offset)
+			writeBinary(header, s.Writers[int32(wid)].Assignments[k])
+		}
+
 		finalData := header.Bytes()
 
 		R := bytes.NewReader(finalData)
@@ -594,13 +618,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				s3backuplog.WarnPrint("Unhandled response checking for existant object: %s", errResponse.Code)
 			}
 		} else {
-			s3backuplog.DebugPrint("%s already in S3", objectStat.Key)
+			s3backuplog.DebugPrint("%s already in S3, size: %d", objectStat.Key, objectStat.Size)
 			io.ReadAll(r.Body) // we must read data from stream, otherwise backup client gets out of sync
 			known = true
 		}
 		if s.Writers[int32(wid)].Chunksize == 0 {
 			//Here chunk size is derived
 			s.Writers[int32(wid)].Chunksize = uint64(size)
+		}
+
+		// save the sizes required for offset calculation
+		if strings.HasPrefix(r.RequestURI, "/dynamic_chunk?") {
+			s3backuplog.DebugPrint("Adding digest %s to dynamic chunks list, size: %d", digest, size)
+			s.Writers[int32(wid)].DynamicChunkSizes[digest] = uint64(size)
 		}
 		info := ChunkUploadInfo{}
 		info.Digest = digest
