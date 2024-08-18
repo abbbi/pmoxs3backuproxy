@@ -1,8 +1,5 @@
----
-name test dynamic index functionality
-
+name: test dynamic index functionality
 on: [push, pull_request]
-
 jobs:
   test:
     runs-on: ubuntu-latest
