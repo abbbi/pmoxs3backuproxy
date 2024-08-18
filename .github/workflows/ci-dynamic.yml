@@ -30,3 +30,8 @@ jobs:
       - name: "Start backup proxy"
         run: |
           go run -v tizbac/pmoxs3backuproxy/cmd/pmoxs3backuproxy -endpoint 127.0.0.1:9000  -bind 0.0.0.0:8007 -ticketexpire 120 -debug &
+      - name: "Create backup"
+        run: |
+          export PBS_PASSWORD=$(jq -r .secretKey < /tmp/minio.json)
+          export USERNAME=$(jq -r .accessKey < /tmp/minio.json)
+          sudo -E proxmox-backup-client backup root.pxar:/etc --repository "$USERNAME@pbs@127.0.0.1:backups"
