@@ -30,7 +30,6 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -467,29 +466,29 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		spew.Dump(s.Writers[int32(wid)].Assignments)
 
+		/**
 		var keys []int64
 		for k := range s.Writers[int32(wid)].Assignments {
 			keys = append(keys, k)
 		}
 		sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+		*/
 
 		var offset uint64 = 0
-		for _, k := range keys {
-			digest := hex.EncodeToString(s.Writers[int32(wid)].Assignments[k])
-
-			foo, ok := s.Writers[int32(wid)].DynamicChunkSizes[digest]
+		//for _, k := range keys {
+		for v, k := range s.Writers[int32(wid)].Assignments {
+			digest := hex.EncodeToString(k)
+			origsize, ok := s.Writers[int32(wid)].DynamicChunkSizes[digest]
 			if ok {
-				s3backuplog.DebugPrint("Found original size for digest %s, size: %d", digest, foo)
+				s3backuplog.DebugPrint("Found original size for digest %s, size: %d", digest, origsize)
 			} else {
 				panic("foo")
 			}
-
 			spew.Dump(k)
-			offset = uint64(k) + foo
+			offset = uint64(v) + origsize
 			s3backuplog.ErrorPrint("OFFSET IS: %d", offset)
-			spew.Dump(offset)
 			writeBinary(header, offset)
-			writeBinary(header, s.Writers[int32(wid)].Assignments[k])
+			writeBinary(header, k)
 		}
 
 		finalData := header.Bytes()
