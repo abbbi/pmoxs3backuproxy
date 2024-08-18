@@ -12,7 +12,6 @@ jobs:
           version: "latest"
           username: "minio"
           password: "minio"
-          bucket : "backups"
       - name: Setup MinIO client
         uses: yakubique/setup-minio-cli@v1
       - name: "Create minio access"
