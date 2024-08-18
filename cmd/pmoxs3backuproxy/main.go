@@ -37,8 +37,6 @@ import (
 	"tizbac/pmoxs3backuproxy/internal/s3backuplog"
 	"tizbac/pmoxs3backuproxy/internal/s3pmoxcommon"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -463,19 +461,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		reserved := [4032]byte{}
 		writeBinary(header, reserved)
-
-		spew.Dump(s.Writers[int32(wid)].Assignments)
-
-		/**
-		var keys []int64
-		for k := range s.Writers[int32(wid)].Assignments {
-			keys = append(keys, k)
-		}
-		sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-		*/
-
 		var offset uint64 = 0
-		//for _, k := range keys {
 		for v, k := range s.Writers[int32(wid)].Assignments {
 			digest := hex.EncodeToString(k)
 			origsize, ok := s.Writers[int32(wid)].DynamicChunkSizes[digest]
@@ -484,9 +470,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} else {
 				panic("foo")
 			}
-			spew.Dump(k)
 			offset = uint64(v) + origsize
-			s3backuplog.ErrorPrint("OFFSET IS: %d", offset)
 			writeBinary(header, offset)
 			writeBinary(header, k)
 		}
