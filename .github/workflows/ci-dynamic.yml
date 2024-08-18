@@ -14,8 +14,6 @@ jobs:
         uses: yakubique/setup-minio-cli@v1
       - name: Setup golang
         uses: actions/setup-go@v5
-      - name: setup jq
-        uses: shiipou/setup-yq-action@v2.0.1
       - name: "Create minio access"
         run: |
           mc alias set 'ci' 'http://127.0.0.1:9000' 'minioadmin' 'minioadmin'
@@ -24,7 +22,7 @@ jobs:
       - name: "Install proxmox backup client"
         run: |
           sudo apt update -y >/dev/null 2>&1
-          sudo apt install wget -y >/dev/null 2>&1
+          sudo apt install jq wget -y >/dev/null 2>&1
           sudo wget https://enterprise.proxmox.com/debian/proxmox-release-bullseye.gpg -O /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
           echo "deb http://download.proxmox.com/debian/pbs-client bullseye main" | sudo tee -a /etc/apt/sources.list.d/pbs.list
           sudo apt update -y >/dev/null 2>&1
