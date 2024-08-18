@@ -38,4 +38,9 @@ jobs:
           export PBS_PASSWORD=$(jq -r .secretKey < /tmp/minio.json)
           export USERNAME=$(jq -r .accessKey < /tmp/minio.json)
           export PBS_FINGERPRINT="55:BC:29:4B:BA:B6:A1:03:42:A9:D8:51:14:9D:BD:00:D2:2A:9C:A1:B8:4A:85:E1:AF:B2:0C:48:40:D6:CC:A4"
-          sudo -E proxmox-backup-client backup proxy.pxar:. --repository "$USERNAME@pbs@127.0.0.1:backups"
+          export REPO="$USERNAME@pbs@127.0.0.1:backups"
+          echo "create backup"
+          sudo -E proxmox-backup-client backup proxy.pxar:. --repository "$REPO"
+          echo "restore backup"
+          VER=$(proxmox-backup-client snapshot list --repository "$REPO" --output-format text | tail -n 2 | grep host  | awk '{print $2 }')
+          sudo -E proxmox-backup-client restore "$VER" proxy.pxar /tmp/restore/ --repository "$REPO"
