@@ -27,11 +27,9 @@ jobs:
           echo "deb http://download.proxmox.com/debian/pbs-client bullseye main" | sudo tee -a /etc/apt/sources.list.d/pbs.list
           sudo apt update -y >/dev/null 2>&1
           sudo apt install -y proxmox-backup-client
-      - name: "Start backup proxy"
-        run: |
-          go run tizbac/pmoxs3backuproxy/cmd/pmoxs3backuproxy -endpoint 127.0.0.1:9000 -bind 127.0.0.1:8007  -debug &
       - name: "Create backup"
         run: |
+          go run tizbac/pmoxs3backuproxy/cmd/pmoxs3backuproxy -endpoint 127.0.0.1:9000 -bind 127.0.0.1:8007  -debug &
           export PBS_PASSWORD=$(jq -r .secretKey < /tmp/minio.json)
           export USERNAME=$(jq -r .accessKey < /tmp/minio.json)
           sudo -E proxmox-backup-client backup root.pxar:/etc --repository "$USERNAME@pbs@127.0.0.1:backups"
