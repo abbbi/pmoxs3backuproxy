@@ -510,7 +510,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(err.Error()))
 			return
 		}
-		s3backuplog.ErrorPrint("%s", body)
 		for i := 0; i < len(req.DigestList); i++ {
 			b, err := hex.DecodeString(req.DigestList[i])
 			if err != nil {
