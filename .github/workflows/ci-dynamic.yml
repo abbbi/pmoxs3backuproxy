@@ -25,8 +25,8 @@ jobs:
         run: |
           sudo apt update -y >/dev/null 2>&1
           sudo apt install wget -y >/dev/null 2>&1
-          sudo wget https://enterprise.proxmox.com/debian/proxmox-release-buster.gpg -O /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
-          echo "deb http://download.proxmox.com/debian/pbs-client buster main" | sudo tee -a /etc/apt/sources.list.d/pbs.list
+          sudo wget https://enterprise.proxmox.com/debian/proxmox-release-bullseye.gpg -O /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
+          echo "deb http://download.proxmox.com/debian/pbs-client bullseye main" | sudo tee -a /etc/apt/sources.list.d/pbs.list
           sudo apt update -y >/dev/null 2>&1
           sudo apt install -y proxmox-backup-client
       - name: "Start backup proxy"
