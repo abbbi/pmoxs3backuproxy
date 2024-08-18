@@ -42,5 +42,6 @@ jobs:
           echo "create backup"
           sudo -E proxmox-backup-client backup proxy.pxar:. --repository "$REPO"
           echo "restore backup"
+          proxmox-backup-client snapshot list --repository "$REPO"
           VER=$(proxmox-backup-client snapshot list --repository "$REPO" --output-format text | tail -n 2 | grep host  | awk '{print $2 }')
           sudo -E proxmox-backup-client restore "$VER" proxy.pxar /tmp/restore/ --repository "$REPO"
