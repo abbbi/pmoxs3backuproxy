@@ -12,7 +12,15 @@ jobs:
           version: "latest"
       - name: Setup MinIO client
         uses: yakubique/setup-minio-cli@v1
+      - name: Setup golang
+        uses: actions/setup-go@v5
+      - name: setup jq
+        uses: shiipou/setup-yq-action@v2.0.1
       - name: "Create minio access"
         run: |
           mc alias set 'ci' 'http://127.0.0.1:9000' 'minioadmin' 'minioadmin'
-          mc admin user svcacct add ci minioadmin
+          mc mb ci/backups
+          mc admin user svcacct add ci minioadmin --json > /tmp/minio.json
+      - name: "Start backup proxy"
+        run: |
+          go run -v tizbac/pmoxs3backuproxy/cmd/pmoxs3backuproxy -endpoint 127.0.0.1:9000  -bind 0.0.0.0:8007 -ticketexpire 120 -debug &
