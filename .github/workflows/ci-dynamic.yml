@@ -10,11 +10,9 @@ jobs:
         with:
           port: "9000"
           version: "latest"
-          username: "minio"
-          password: "minio"
       - name: Setup MinIO client
         uses: yakubique/setup-minio-cli@v1
       - name: "Create minio access"
         run: |
-          mc alias set 'ci' 'http://127.0.0.1:9000' 'minio' 'minio'
-          mc admin user svcacct add myminio minio
+          mc alias set 'ci' 'http://127.0.0.1:9000' 'minioadmin' 'minioadmin'
+          mc admin user svcacct add ci minioadmin
