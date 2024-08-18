@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - name: setup minio
+      - name: Setup MinIO Server
         uses: infleet/minio-action@v0.0.1
         with:
           port: "9000"
@@ -13,3 +13,9 @@ jobs:
           username: "minio"
           password: "minio"
           bucket : "backups"
+      - name: Setup MinIO client
+        uses: yakubique/setup-minio-cli@v1
+      - name: "Create minio access"
+        run: |
+          mc alias set 'ci' 'http://127.0.0.1:9000' 'minio' 'minio'
+          mc admin user svcacct add myminio minio
