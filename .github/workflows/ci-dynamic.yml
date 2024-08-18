@@ -29,7 +29,7 @@ jobs:
           sudo apt install -y proxmox-backup-client
       - name: "Start backup proxy"
         run: |
-          go run -v tizbac/pmoxs3backuproxy/cmd/pmoxs3backuproxy -endpoint 127.0.0.1:9000  -bind 0.0.0.0:8007 -ticketexpire 120 -debug &
+          go run tizbac/pmoxs3backuproxy/cmd/pmoxs3backuproxy -endpoint 127.0.0.1:9000 -bind 127.0.0.1:8007  -debug
       - name: "Create backup"
         run: |
           export PBS_PASSWORD=$(jq -r .secretKey < /tmp/minio.json)
