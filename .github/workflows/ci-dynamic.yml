@@ -47,3 +47,4 @@ jobs:
           VER=$(grep dynamic /tmp/backups | awk '{print $2 }')
           echo $VER
           sudo -E proxmox-backup-client restore "$VER" proxy.pxar /tmp/restore/ --repository "$REPO"
+          find /tmp/restore
