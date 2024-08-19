@@ -42,7 +42,10 @@ jobs:
           export PBS_REPOSITORY="$USERNAME@pbs@127.0.0.1:$BUCKET"
           echo "start proxy"
           nohup ./pmoxs3backuproxy -endpoint $ENDPOINT -bind 127.0.0.1:8007 -debug > nohup.out 2> nohup.err < /dev/null &
-          echo "create backup"
+          echo "create first backup"
+          sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id dynamic
+          echo "create second backup"
+          echo new-data > changed
           sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id dynamic
           echo "restore backup"
           proxmox-backup-client snapshot list
