@@ -21,10 +21,6 @@ jobs:
           mc alias set 'ci' 'http://127.0.0.1:9000' 'minioadmin' 'minioadmin'
           mc mb ci/backups
           mc admin user svcacct add ci minioadmin --json > /tmp/minio.json
-      - name: "Install Act dependencies"
-        if: ${{ env.ACT }}
-        run: |
-          apt-get update && apt-get install sudo -y
       - name: "Install proxmox backup client"
         run: |
           sudo apt update -y >/dev/null 2>&1
@@ -62,6 +58,7 @@ jobs:
           proxmox-backup-client snapshot list > /tmp/backups 2>&1 > /tmp/backups 2>&1
           VER=$(grep -m 1 testbackup /tmp/backups | awk '{print $2 }')
           echo $VER
+          rm -rf /tmp/restore
           sudo -E proxmox-backup-client restore "$VER" proxy.pxar /tmp/restore/
           find /tmp/restore > /dev/null
           echo "check notes api"
