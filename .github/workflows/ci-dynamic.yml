@@ -27,7 +27,7 @@ jobs:
           echo "deb http://download.proxmox.com/debian/pbs-client bullseye main" | sudo tee -a /etc/apt/sources.list.d/pbs.list
           sudo apt update -y >/dev/null 2>&1
           sudo apt install -y proxmox-backup-client
-      - name: "Create backup"
+      - name: "Create backup and test restore"
         run: |
           echo "build proxy"
           go build  tizbac/pmoxs3backuproxy/cmd/pmoxs3backuproxy
@@ -47,4 +47,9 @@ jobs:
           VER=$(grep dynamic /tmp/backups | awk '{print $2 }')
           echo $VER
           sudo -E proxmox-backup-client restore "$VER" proxy.pxar /tmp/restore/ --repository "$REPO"
-          find /tmp/restore
+          find /tmp/restore > /dev/null
+          echo "check notes api"
+          sudo -E proxmox-backup-client snapshot notes update $VER mynote $REPO
+          sudo -E proxmox-backup-client snapshot notes show $VER $REPO | grep -q mynote
+          echo "check files api"
+          sudo -E proxmox-backup-client snapshot files $VER $REPO | grep -q "proxy.pxar"
