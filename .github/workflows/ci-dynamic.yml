@@ -40,7 +40,7 @@ jobs:
           export PBS_FINGERPRINT="55:BC:29:4B:BA:B6:A1:03:42:A9:D8:51:14:9D:BD:00:D2:2A:9C:A1:B8:4A:85:E1:AF:B2:0C:48:40:D6:CC:A4"
           export PBS_REPOSITORY="$USERNAME@pbs@127.0.0.1:backups"
           echo "create backup"
-          sudo -E proxmox-backup-client backup proxy.pxar:.  --backup-id dynamic
+          sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id dynamic
           echo "restore backup"
           proxmox-backup-client snapshot list
           proxmox-backup-client snapshot list > /tmp/backups 2>&1 > /tmp/backups 2>&1
@@ -49,7 +49,11 @@ jobs:
           sudo -E proxmox-backup-client restore "$VER" proxy.pxar /tmp/restore/
           find /tmp/restore > /dev/null
           echo "check notes api"
-          sudo -E proxmox-backup-client snapshot notes update $VER mynote
-          sudo -E proxmox-backup-client snapshot notes show $VER | grep -q mynote
+          sudo -E proxmox-backup-client snapshot notes update "$VER" mynote
+          sudo -E proxmox-backup-client snapshot notes show "$VER" | grep -q mynote
           echo "check files api"
-          sudo -E proxmox-backup-client snapshot files $VER | grep -q "proxy.pxar"
+          sudo -E proxmox-backup-client snapshot files "$VER" | grep -q "proxy.pxar"
+          echo "check protection api"
+          proxmox-backup-client snapshot protected show "$VER" | grep -q false
+          proxmox-backup-client snapshot protected update "$VER" true
+          proxmox-backup-client snapshot protected show "$VER" | grep -q true
