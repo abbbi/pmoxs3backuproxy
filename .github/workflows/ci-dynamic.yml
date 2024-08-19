@@ -14,11 +14,17 @@ jobs:
         uses: yakubique/setup-minio-cli@v1
       - name: Setup golang
         uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.22.4'
       - name: "Create minio access"
         run: |
           mc alias set 'ci' 'http://127.0.0.1:9000' 'minioadmin' 'minioadmin'
           mc mb ci/backups
           mc admin user svcacct add ci minioadmin --json > /tmp/minio.json
+      - name: "Install Act dependencies"
+        if: ${{ env.ACT }}
+        run: |
+          apt-get update && apt-get install sudo -y
       - name: "Install proxmox backup client"
         run: |
           sudo apt update -y >/dev/null 2>&1
