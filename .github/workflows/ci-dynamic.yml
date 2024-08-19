@@ -27,18 +27,21 @@ jobs:
           echo "deb http://download.proxmox.com/debian/pbs-client bullseye main" | sudo tee -a /etc/apt/sources.list.d/pbs.list
           sudo apt update -y >/dev/null 2>&1
           sudo apt install -y proxmox-backup-client
+      - name: "Build Proxy and GC"
+        run: |
+          go build  tizbac/pmoxs3backuproxy/cmd/pmoxs3backuproxy
+          go build  tizbac/pmoxs3backuproxy/cmd/garbagecollector
       - name: "Create backup and test restore"
         run: |
-          echo "build proxy"
-          go build  tizbac/pmoxs3backuproxy/cmd/pmoxs3backuproxy
           echo "start proxy"
-          nohup ./pmoxs3backuproxy -endpoint 127.0.0.1:9000 -bind 127.0.0.1:8007 -debug > nohup.out 2> nohup.err < /dev/null &
-          cat nohup.out
-          cat nohup.err
           export PBS_PASSWORD=$(jq -r .secretKey < /tmp/minio.json)
           export USERNAME=$(jq -r .accessKey < /tmp/minio.json)
+          export BUCKET="backups"
+          export ENDPOINT="127.0.0.1:9000"
           export PBS_FINGERPRINT="55:BC:29:4B:BA:B6:A1:03:42:A9:D8:51:14:9D:BD:00:D2:2A:9C:A1:B8:4A:85:E1:AF:B2:0C:48:40:D6:CC:A4"
-          export PBS_REPOSITORY="$USERNAME@pbs@127.0.0.1:backups"
+          export PBS_REPOSITORY="$USERNAME@pbs@$ENDPOINT:$BUCKET"
+          echo "start proxy"
+          nohup ./pmoxs3backuproxy -endpoint $ENDPOINT -bind 127.0.0.1:8007 -debug > nohup.out 2> nohup.err < /dev/null &
           echo "create backup"
           sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id dynamic
           echo "restore backup"
@@ -57,3 +60,5 @@ jobs:
           proxmox-backup-client snapshot protected show "$VER" | grep -q false
           proxmox-backup-client snapshot protected update "$VER" true
           proxmox-backup-client snapshot protected show "$VER" | grep -q true
+          echo "run GC"
+          ./garbagecollector -endpoint 127.0.0.1:9000 -accesskey "$USERNAME" -secretkey "$PBS_PASSWORD" -bucket backups
