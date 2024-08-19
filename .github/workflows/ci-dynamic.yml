@@ -43,11 +43,11 @@ jobs:
           echo "start proxy"
           nohup ./pmoxs3backuproxy -endpoint $ENDPOINT -bind 127.0.0.1:8007 -debug > /tmp/nohup.out 2> /tmp/nohup.err < /dev/null &
           echo "create first backup"
-          sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id testbackup > /tmp/first_backup
+          sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id testbackup > /tmp/first_backup 2>&1
           cat /tmp/first_backup
           echo "create second backup"
           echo new-data > changed
-          sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id testbackup > /tmp/second_backup
+          sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id testbackup > /tmp/second_backup 2>&1
           cat /tmp/second_backup
           echo "check if second backup was done incrementally"
           grep -q "backup was done incrementally" /tmp/second_backup
