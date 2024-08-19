@@ -43,14 +43,14 @@ jobs:
           echo "start proxy"
           nohup ./pmoxs3backuproxy -endpoint $ENDPOINT -bind 127.0.0.1:8007 -debug > nohup.out 2> nohup.err < /dev/null &
           echo "create first backup"
-          sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id dynamic
+          sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id full
           echo "create second backup"
           echo new-data > changed
-          sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id dynamic
-          echo "restore backup"
+          sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id inc
+          echo "restore first backup"
           proxmox-backup-client snapshot list
           proxmox-backup-client snapshot list > /tmp/backups 2>&1 > /tmp/backups 2>&1
-          VER=$(grep dynamic /tmp/backups | awk '{print $2 }')
+          VER=$(grep full /tmp/backups | awk '{print $2 }')
           echo $VER
           sudo -E proxmox-backup-client restore "$VER" proxy.pxar /tmp/restore/
           find /tmp/restore > /dev/null
