@@ -58,9 +58,11 @@ type Server struct {
 }
 
 type DataStoreStatus struct {
-	Avail int64 `json:"avail"`
-	Total int64 `json:"total"`
-	Used  int64 `json:"used"`
+	Avail   int64 `json:"avail"`
+	Total   int64 `json:"total"`
+	Used    int64 `json:"used"`
+	Counts  int64 `json:"counts"`
+	GCState bool  `json:"gc-status"`
 }
 
 type AssignmentRequest struct {

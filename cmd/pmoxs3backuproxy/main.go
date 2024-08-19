@@ -270,9 +270,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			//Seems to not be supported by minio fecthing used size so we return dummy values to make all look fine
 			resp, _ := json.Marshal(Response{
 				Data: DataStoreStatus{
-					Used:  10000,
-					Avail: 10000000,
-					Total: 10000 + 10000000,
+					Used:    10000,
+					Avail:   10000000,
+					Total:   10000 + 10000000,
+					Counts:  100,
+					GCState: true,
 				},
 			})
 			w.Header().Add("Content-Type", "application/json")
