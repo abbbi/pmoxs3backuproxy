@@ -270,11 +270,59 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			//Seems to not be supported by minio fecthing used size so we return dummy values to make all look fine
 			resp, _ := json.Marshal(Response{
 				Data: DataStoreStatus{
-					Used:  10000,
-					Avail: 10000000,
-					Total: 10000 + 10000000,
+					Used:    10000,
+					Avail:   10000000,
+					Total:   10000 + 10000000,
+					Counts:  0,
+					GCState: true, // todo
 				},
 			})
+			w.Header().Add("Content-Type", "application/json")
+			w.Write(resp)
+		}
+
+		if strings.HasPrefix(action, "namespace") {
+			/** We dont have namespaces implemented now, so we just return
+			 *	the default namespace
+			**/
+			namespaces := make([]Namespace, 0)
+			namespaces = append(namespaces, Namespace{Name: "Root"})
+			resp, _ := json.Marshal(Response{
+				Data: namespaces,
+			})
+			w.Header().Add("Content-Type", "application/json")
+			w.Write(resp)
+		}
+
+		if strings.HasPrefix(action, "groups") {
+			/**
+				Return a backup group (usually for a given namespace)
+			**/
+			snapshots, _ := s3pmoxcommon.ListSnapshots(*C.Client, ds, false)
+			groups := make([]Group, 0)
+			for _, snap := range snapshots {
+				var filelist []string
+				for _, file := range snap.Files {
+					filelist = append(filelist, file.Filename)
+				}
+				g := Group{
+					Count:      uint64(len(snapshots)),
+					BackupID:   snap.BackupID,
+					BackupTime: snap.BackupTime,
+					Files:      filelist,
+					BackupType: snap.BackupType,
+					/* During proxmox-backup-manager pull the sync job expects
+					 * a size field, otherwise it asumes the backup to be active
+					 * and ignores it during sync
+					 **/
+					Size: 0,
+				}
+				groups = append(groups, g)
+			}
+			resp, _ := json.Marshal(Response{
+				Data: groups,
+			})
+			fmt.Printf("%s", resp)
 			w.Header().Add("Content-Type", "application/json")
 			w.Write(resp)
 		}

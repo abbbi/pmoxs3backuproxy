@@ -30,6 +30,12 @@ func ListSnapshots(c minio.Client, datastore string, returnCorrupted bool) ([]Sn
 			existing_S, ok := prefixMap[path[1]]
 			if ok {
 				if len(path) == 3 {
+					/** Dont add the custom chunk index list
+					 * for dynamic backup to filelist
+					 **/
+					if strings.HasSuffix(path[2], ".csjson") {
+						continue
+					}
 					if object.UserTags["protected"] == "true" {
 						existing_S.Protected = true
 					}
