@@ -52,6 +52,7 @@ jobs:
           cat /tmp/first_backup
           echo "create second backup"
           echo new-data > changed
+          sleep 5
           sudo -E proxmox-backup-client backup proxy.pxar:. --backup-id testbackup > /tmp/second_backup 2>&1
           cat /tmp/second_backup
           echo "check if second backup was done incrementally"
